@@ -19,9 +19,9 @@ export class BooksController {
   constructor(private readonly BooksService: BooksService) {}
 
   @Post()
-  async create(@Res() res, @Body() book: CreateBookDto) {
+  async create(@Res() res, @Body() data: CreateBookDto) {
     try {
-      const bookId = await this.BooksService.create(book);
+      const bookId = await this.BooksService.create(data);
       return AppResponse.ok(res, { bookId }, 'Buku berhasil ditambahkan', 201);
     } catch (error) {
       return AppResponse.badRequest(res, error.message);
@@ -29,8 +29,8 @@ export class BooksController {
   }
 
   @Get()
-  async findAll(@Res() res, @Query() query) {
-    const books = await this.BooksService.findAll(query);
+  async findAll(@Res() res, @Query() queryParams) {
+    const books = await this.BooksService.findAll(queryParams);
     return AppResponse.ok(res, { books });
   }
 

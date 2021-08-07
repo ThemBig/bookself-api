@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { nanoid } from 'nanoid';
 import { BookTransformer } from 'src/base/book.transformer';
 import { CustomError } from 'src/base/custom.error';
+import { getManager } from 'typeorm';
+import { Book } from './entities/book.entity';
 
 @Injectable()
 export class BooksService {
@@ -10,53 +12,53 @@ export class BooksService {
     this._books = [];
   }
 
-  async create(book) {
-    if (!book.name) {
+  async create(data) {
+    if (!data.name) {
       throw new CustomError('Gagal menambahkan buku. Mohon isi nama buku');
       return;
     }
-    if (book.readPage > book.pageCount) {
+    if (data.readPage > data.pageCount) {
       throw new CustomError(
         'Gagal menambahkan buku. readPage tidak boleh lebih besar dari pageCount',
       );
       return;
     }
-    book['id'] = nanoid(16);
-    book['finished'] = book.pageCount === book.readPage ? true : false;
-    book['insertedAt'] = new Date().toISOString();
-    book['updatedAt'] = new Date().toISOString();
+    data['id'] = nanoid(16);
+    data['finished'] = data.pageCount === data.readPage ? true : false;
+    data['insertedAt'] = new Date().toISOString();
+    data['updatedAt'] = new Date().toISOString();
 
-    this._books.push(book);
-    return book['id'];
+    await Book.save(data);
+
+    return data['id'];
   }
 
   async findAll(QueryParam?: any) {
     const { name, reading, finished } = QueryParam;
-    let books = this._books;
-
+    const books = getManager().createQueryBuilder().select().from(Book, 'book');
     if (finished === '1') {
-      books = books.filter((book) => book.finished === true);
+      books.andWhere({ finished: true });
     } else if (finished === '0') {
-      books = books.filter((book) => book.finished === false);
+      books.andWhere({ finished: false });
     }
 
     if (reading === '1') {
-      books = books.filter((book) => book.reading === true);
+      books.andWhere({ reading: true });
     } else if (reading === '0') {
-      books = books.filter((book) => book.reading === false);
+      books.andWhere({ reading: false });
     }
 
     if (name !== undefined) {
-      books = books.filter((book) => {
-        const search = new RegExp(name.toLowerCase(), 'gi');
-        return search.test(book.name.toLowerCase());
+      books.andWhere('LOWER(book.name) like :name', {
+        name: `%${name.toLowerCase()}%`,
       });
     }
-    return BookTransformer.transform(books);
+
+    return BookTransformer.transform(await books.getRawMany());
   }
 
   async findOne(id) {
-    const book = this._books.filter((n) => n.id === id)[0];
+    const book = await getManager().getRepository(Book).findOne(id);
 
     if (book === undefined) {
       throw new CustomError('Buku tidak ditemukan', 404);
@@ -65,40 +67,44 @@ export class BooksService {
     return book;
   }
 
-  async update(id: string, book) {
-    if (!book.name) {
+  async update(id: string, data) {
+    if (!data.name) {
       throw new CustomError('Gagal memperbarui buku. Mohon isi nama buku', 400);
       return;
     }
-    if (book.readPage > book.pageCount) {
+    if (data.readPage > data.pageCount) {
       throw new CustomError(
         'Gagal memperbarui buku. readPage tidak boleh lebih besar dari pageCount',
         400,
       );
       return;
     }
-    const index = this._books.findIndex((n) => n.id === id);
+    data['finished'] = data.pageCount === data.readPage ? true : false;
+    data['updatedAt'] = new Date().toISOString();
 
-    book['finished'] = book.pageCount === book.readPage ? true : false;
-    book['insertedAt'] = new Date().toISOString();
-    book['updatedAt'] = new Date().toISOString();
+    await getManager()
+      .createQueryBuilder()
+      .update(Book)
+      .set({ ...data })
+      .where('book.id = :id', { id })
+      .execute();
 
-    if (index !== -1) {
-      this._books[index] = {
-        ...this._books[index],
-        ...book,
-      };
-      return this._books[index];
+    const book = await getManager().getRepository(Book).findOne(id);
+    if (!book) {
+      throw new CustomError('Gagal memperbarui buku. Id tidak ditemukan', 404);
     }
 
-    throw new CustomError('Gagal memperbarui buku. Id tidak ditemukan', 404);
-    return;
+    return book;
   }
 
   async remove(id: string) {
-    const index = this._books.findIndex((n) => n.id === id);
-    if (index !== -1) {
-      this._books.splice(index, 1);
+    const deleted = await getManager()
+      .createQueryBuilder()
+      .delete()
+      .from(Book)
+      .where('book.id = :id', { id })
+      .execute();
+    if (deleted.affected) {
       return true;
     }
 

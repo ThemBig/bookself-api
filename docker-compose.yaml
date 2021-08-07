@@ -1,0 +1,22 @@
+version: '3'
+services: 
+  bookself-postgres:
+    image: postgres:13
+    ports:
+      - 5432:5432
+    environment: 
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=rahasia
+      - POSTGRES_DB=belajar
+  bookself-api:
+    build: ./
+    ports:
+      - 3000:3000
+    environment: 
+      - DB_HOST=bookself-postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=rahasia
+      - DB_NAME=belajar
+    depends_on: 
+      - bookself-postgres
